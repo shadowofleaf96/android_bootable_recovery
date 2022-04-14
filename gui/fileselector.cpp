@@ -20,15 +20,8 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <algorithm>
-#ifdef __ANDROID_API_M__
 #include <vector>
-#ifdef __ANDROID_API_N__
-#include <android-base/strings.h>
-#else
-#include <base/strings.h>
-#endif
-#else
-#endif
+
 extern "C" {
 #include "../twcommon.h"
 }
@@ -47,7 +40,7 @@ GUIFileSelector::GUIFileSelector(xml_node<>* node) : GUIScrollList(node)
 	xml_attribute<>* attr;
 	xml_node<>* child;
 
-	mFolderIcon = mFileIcon = NULL;
+	mFolderIcon = mFolderUpIcon = mFileIcon = mZipIcon = mImgIcon = NULL;
 	mShowFolders = mShowFiles = mShowNavFolders = 1;
 	mUpdate = 0;
 	mPathVar = "cwd";
@@ -124,7 +117,10 @@ GUIFileSelector::GUIFileSelector(xml_node<>* node) : GUIScrollList(node)
 	child = FindNode(node, "icon");
 	if (child) {
 		mFolderIcon = LoadAttrImage(child, "folder");
+		mFolderUpIcon = LoadAttrImage(child, "folderup");
 		mFileIcon = LoadAttrImage(child, "file");
+		mZipIcon = LoadAttrImage(child, "zip");
+		mImgIcon = LoadAttrImage(child, "img");
 	}
 	int iconWidth = 0, iconHeight = 0;
 	if (mFolderIcon && mFolderIcon->GetResource() && mFileIcon && mFileIcon->GetResource()) {
@@ -243,6 +239,24 @@ int GUIFileSelector::GetFileList(const std::string folder)
 	DIR* d;
 	struct dirent* de;
 	struct stat st;
+	size_t start_pos = 0, end_pos = 0;
+	vector<string> XTN;
+	vector<string> PRFX;
+	string mEpnds = mExtn + ",";
+	end_pos = mEpnds.find(",", start_pos);
+	while (end_pos != string::npos && start_pos < mEpnds.size()) {
+		XTN.push_back(mEpnds.substr(start_pos, end_pos - start_pos));
+		start_pos = end_pos + 1;
+		end_pos = mEpnds.find(",", start_pos);
+	}
+	start_pos = end_pos = 0;
+	mEpnds = mPrfx + ";";
+	end_pos = mEpnds.find(";", start_pos);
+	while (end_pos != string::npos && start_pos < mEpnds.size()) {
+		PRFX.push_back(mEpnds.substr(start_pos, end_pos - start_pos));
+		start_pos = end_pos + 1;
+		end_pos = mEpnds.find(";", start_pos);
+	}
 
 	// Clear all data
 	mFolderList.clear();
@@ -294,56 +308,22 @@ int GUIFileSelector::GetFileList(const std::string folder)
 			if (mShowNavFolders || (data.fileName != "." && data.fileName != ".."))
 				mFolderList.push_back(data);
 		} else if (data.fileType == DT_REG || data.fileType == DT_LNK || data.fileType == DT_BLK) {
-#ifdef __ANDROID_API_M__
-			std::vector<std::string> mExtnResults = android::base::Split(mExtn, ";");
-			for (const std::string& mExtnElement : mExtnResults)
+			for (size_t i = 0; i < XTN.size(); i++)
 			{
-				std::string mExtnName = android::base::Trim(mExtnElement);
-				if (mExtnName.empty() || (data.fileName.length() >= mExtnName.length() && data.fileName.substr(data.fileName.length() - mExtnName.length()) == mExtnName)) {
-					if (mExtnName == ".ab" && twadbbu::Check_ADB_Backup_File(path))
+				if (XTN[i].empty() || (data.fileName.length() >= XTN[i].length() && data.fileName.substr(data.fileName.length() - XTN[i].length()) == XTN[i])) {
+					if (XTN[i] == ".ab" && twadbbu::Check_ADB_Backup_File(path))
 						mFolderList.push_back(data);
 					else
 						mFileList.push_back(data);
 					match = true;
-					break;
 				}
 			}
-
 			if (!match) {
-				std::vector<std::string> mPrfxResults = android::base::Split(mPrfx, ";");
-				for (const std::string& mPrfxElement : mPrfxResults)
+				for (const std::string& mPrfxElement : PRFX)
 				{
-					std::string mPrfxName = android::base::Trim(mPrfxElement);
-					if (!mPrfxName.empty() && data.fileName.length() >= mPrfxName.length() && data.fileName.substr(0, mPrfxName.length()) == mPrfxName) {
+					if (!mPrfxElement.empty() && data.fileName.length() >= mPrfxElement.length() && data.fileName.substr(0, mPrfxElement.length()) == mPrfxElement) {
 						mFileList.push_back(data);
 					}
-#else //On android 5.1 we can't use android::base::Trim and Split so just use the first extension written in the list
-			std::size_t seppos = mExtn.find_first_of(";");
-			std::string mExtnf;
-			if (seppos!=std::string::npos){
-				mExtnf = mExtn.substr(0, seppos);
-			} else {
-				mExtnf = mExtn;
-			}
-			if (mExtnf.empty() || (data.fileName.length() >= mExtnf.length() && data.fileName.substr(data.fileName.length() - mExtnf.length()) == mExtnf)) {
-				if (mExtnf == ".ab" && twadbbu::Check_ADB_Backup_File(path))
-					mFolderList.push_back(data);
-				else
-					mFileList.push_back(data);
-				match = true;
-			}
-
-			if (!match) {
-				std::size_t seppos = mPrfx.find_first_of(";");
-				std::string mPrfxf;
-				if (seppos!=std::string::npos){
-					mPrfxf = mPrfx.substr(0, seppos);
-				} else {
-					mPrfxf = mPrfx;
-				}
-				if (!mPrfxf.empty() && data.fileName.length() >= mPrfxf.length() && data.fileName.substr(0, mPrfxf.length()) == mPrfxf) {
-					mFileList.push_back(data);
-#endif
 				}
 			}
 		}
@@ -386,11 +366,27 @@ void GUIFileSelector::RenderItem(size_t itemindex, int yPos, bool selected)
 	if (itemindex < folderSize) {
 		text = mFolderList.at(itemindex).fileName;
 		icon = mFolderIcon;
-		if (text == "..")
+		
+		if (text == "..") {
 			text = gui_lookup("up_a_level", "(Up A Level)");
+			icon = mFolderUpIcon;
+		}
 	} else {
 		text = mFileList.at(itemindex - folderSize).fileName;
 		icon = mFileIcon;
+		
+		if (text.length() >= 4) {	
+			string ext = text.substr(text.length() - 4);
+			if (ext == ".zip" || ext == ".ZIP")
+				icon = mZipIcon;
+			if (ext == ".img" || ext == ".IMG")
+				icon = mImgIcon;
+		}
+		if (text.length() >= 5) {	
+			string ext = text.substr(text.length() - 5);
+			if (ext == ".ozip" || ext == ".OZIP")
+				icon = mZipIcon;
+		}		
 	}
 
 	RenderStdItem(yPos, selected, icon, text.c_str());

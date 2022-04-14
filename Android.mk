@@ -1,4 +1,5 @@
 # Copyright (C) 2007 The Android Open Source Project
+# Copyright (C) 2018 ATG Droid  
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -52,12 +53,39 @@ TWHTCD_PATH := $(TWRES_PATH)htcd/
 
 TARGET_RECOVERY_GUI := true
 
-ifneq ($(TW_DEVICE_VERSION),)
-    LOCAL_CFLAGS += -DTW_DEVICE_VERSION='"-$(TW_DEVICE_VERSION)"'
+ifeq ($(PB_OFFICIAL),true)
+    LOCAL_CFLAGS += -DPB_MAIN_BUILD='"-OFFICIAL"'
+else ifeq ($(BETA_BUILD),true)
+    LOCAL_CFLAGS += -DPB_MAIN_BUILD='"-BETA"'
 else
-    LOCAL_CFLAGS += -DTW_DEVICE_VERSION='"-0"'
+    LOCAL_CFLAGS += -DPB_MAIN_BUILD='"-UNOFFICIAL"'
+endif
+
+DEVICE := $(subst omni_,,$(TARGET_PRODUCT))
+
+ifeq ($(PB_DEVICE_MODEL),)
+    LOCAL_CFLAGS += -DPB_DEVICE_MODEL='"$(DEVICE)"'
 endif
 LOCAL_CFLAGS += -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
+LOCAL_CFLAGS += -DBUILD='"$(shell date -u +%d/%m/%Y)"'
+ifneq ($(MAINTAINER),)
+    LOCAL_CFLAGS += -DMTAINER='"$(MAINTAINER)"'
+endif
+
+ifeq ($(PB_FORCE_DD_FLASH),true)
+    LOCAL_CFLAGS += -DPB_FORCE_DD_FLASH='true'
+endif
+
+ifeq ($(PB_DISABLE_DEFAULT_DM_VERITY),true)
+    LOCAL_CFLAGS += -DPB_DISABLE_DEFAULT_DM_VERITY=$(PB_DISABLE_DEFAULT_DM_VERITY)
+endif
+
+ifeq ($(PB_DISABLE_DEFAULT_TREBLE_COMP),true)
+    LOCAL_CFLAGS += -DPB_DISABLE_DEFAULT_TREBLE_COMP=$(PB_DISABLE_DEFAULT_TREBLE_COMP)
+endif
+ifneq ($(PB_TORCH_MAX_BRIGHTNESS),)
+	LOCAL_CFLAGS += -DPB_MAX_BRIGHT_VALUE=\"$(PB_TORCH_BRIGHTNESS_MAX)\"
+endif
 
 LOCAL_SRC_FILES := \
     twrp.cpp \
@@ -198,6 +226,7 @@ LOCAL_C_INCLUDES += external/libselinux/include
 LOCAL_SHARED_LIBRARIES += libselinux
 
 ifeq ($(AB_OTA_UPDATER),true)
+    LOCAL_CFLAGS += -DTW_INCLUDE_INJECTTWRP
     LOCAL_CFLAGS += -DAB_OTA_UPDATER=1
     LOCAL_SHARED_LIBRARIES += libhardware android.hardware.boot@1.0
     TWRP_REQUIRED_MODULES += libhardware
@@ -303,9 +332,6 @@ ifeq ($(TW_NEVER_UNMOUNT_SYSTEM), true)
 endif
 ifeq ($(TW_NO_USB_STORAGE), true)
     LOCAL_CFLAGS += -DTW_NO_USB_STORAGE
-endif
-ifeq ($(TW_INCLUDE_INJECTTWRP), true)
-    LOCAL_CFLAGS += -DTW_INCLUDE_INJECTTWRP
 endif
 ifeq ($(TW_INCLUDE_BLOBPACK), true)
     LOCAL_CFLAGS += -DTW_INCLUDE_BLOBPACK
@@ -428,6 +454,12 @@ endif
 ifneq ($(TW_CLOCK_OFFSET),)
 	LOCAL_CFLAGS += -DTW_CLOCK_OFFSET=$(TW_CLOCK_OFFSET)
 endif
+ifeq ($(PB_DONT_MOUNT_SYSTEM_AS_ROOT), true)
+	LOCAL_CFLAGS += -DPB_DONT_MOUNT_SYSTEM_AS_ROOT
+endif
+
+TW_INCLUDE_REPACKTOOLS := true
+
 ifneq ($(TW_OVERRIDE_SYSTEM_PROPS),)
     TW_INCLUDE_LIBRESETPROP := true
     LOCAL_CFLAGS += -DTW_OVERRIDE_SYSTEM_PROPS=$(TW_OVERRIDE_SYSTEM_PROPS)
@@ -435,6 +467,8 @@ endif
 ifneq ($(TW_INCLUDE_LIBRESETPROP),)
     ifeq ($(shell test $(PLATFORM_SDK_VERSION) -lt 24; echo $$?),0)
         $(warning libresetprop is not available for android < 7)
+        TW_INCLUDE_RESETPROP_PREBUILT := true
+        TWRP_REQUIRED_MODULES += resetprop
     else
         LOCAL_SHARED_LIBRARIES += libresetprop
         LOCAL_C_INCLUDES += external/magisk-prebuilt/include
@@ -457,11 +491,25 @@ TWRP_REQUIRED_MODULES += \
     fsck.fat \
     fatlabel \
     mkfs.fat \
+    mkbootimg \
+    unpackbootimg \
     permissive.sh \
     simg2img_twrp \
     libbootloader_message_twrp \
     init.recovery.hlthchrg.rc \
     init.recovery.service.rc
+ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 26; echo $$?),0)
+TWRP_REQUIRED_MODULES += \
+    init.recovery.ldconfig.rc
+endif
+TWRP_REQUIRED_MODULES += \
+    parted \
+    magiskboot
+
+ifneq ($(TW_OZIP_DECRYPT_KEY),)
+TWRP_REQUIRED_MODULES += \
+    ozip_decrypt
+endif
 
 ifneq ($(TARGET_ARCH), arm64)
     ifneq ($(TARGET_ARCH), x86_64)
@@ -475,8 +523,8 @@ endif
 ifneq ($(TW_USE_TOOLBOX), true)
     ifeq ($(shell test $(PLATFORM_SDK_VERSION) -lt 24; echo $$?),0)
         LOCAL_POST_INSTALL_CMD += \
-            $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/sbin; \
-            ln -sf /sbin/busybox $(TARGET_RECOVERY_ROOT_OUT)/sbin/sh;
+            $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/sbin && \
+            ln -sf /sbin/busybox $(TARGET_RECOVERY_ROOT_OUT)/sbin/sh
     endif
 else
     ifneq ($(wildcard external/toybox/Android.mk),)
@@ -520,9 +568,6 @@ endif
 ifeq ($(BOARD_USES_BML_OVER_MTD),true)
     TWRP_REQUIRED_MODULES += bml_over_mtd
 endif
-ifeq ($(TW_INCLUDE_INJECTTWRP), true)
-    TWRP_REQUIRED_MODULES += injecttwrp
-endif
 ifneq ($(TW_EXCLUDE_DEFAULT_USB_INIT), true)
     TWRP_REQUIRED_MODULES += init.recovery.usb.rc
 endif
@@ -534,12 +579,12 @@ ifeq ($(TWRP_INCLUDE_LOGCAT), true)
             TWRP_REQUIRED_MODULES += event-log-tags
             ifeq ($(BOARD_BUILD_SYSTEM_ROOT_IMAGE),true)
                 LOCAL_POST_INSTALL_CMD += \
-                    mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/system_root/system/etc; \
-                    cp -f $(TARGET_OUT_ETC)/event-log-tags $(TARGET_RECOVERY_ROOT_OUT)/system_root/system/etc/;
+                    $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/system_root/system/etc; \
+                    cp $(TARGET_OUT_ETC)/event-log-tags $(TARGET_RECOVERY_ROOT_OUT)/system_root/system/etc/;
             else
                 LOCAL_POST_INSTALL_CMD += \
-                    mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/system/etc; \
-                    cp -f $(TARGET_OUT_ETC)/event-log-tags $(TARGET_RECOVERY_ROOT_OUT)/system/etc/;
+                    $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/system/etc; \
+                    cp $(TARGET_OUT_ETC)/event-log-tags $(TARGET_RECOVERY_ROOT_OUT)/system/etc/;
             endif
         endif
     endif
@@ -631,7 +676,7 @@ else
     LOCAL_ADDITIONAL_DEPENDENCIES := file_contexts.bin
 endif
 LOCAL_POST_INSTALL_CMD += \
-    cp -f $(PRODUCT_OUT)/obj/ETC/file_contexts.bin_intermediates/file_contexts.concat.tmp $(TARGET_RECOVERY_ROOT_OUT)/file_contexts;
+    $(hide) cp -f $(PRODUCT_OUT)/obj/ETC/file_contexts.bin_intermediates/file_contexts.concat.tmp $(TARGET_RECOVERY_ROOT_OUT)/file_contexts
 
 include $(BUILD_PHONY_PACKAGE)
 
@@ -919,8 +964,7 @@ endif
 
 #$(commands_TWRP_local_path)/otautil/Android.mk
 #includes for TWRP
-include $(commands_TWRP_local_path)/injecttwrp/Android.mk \
-    $(commands_TWRP_local_path)/htcdumlock/Android.mk \
+include $(commands_TWRP_local_path)/htcdumlock/Android.mk \
     $(commands_TWRP_local_path)/gui/Android.mk \
     $(commands_TWRP_local_path)/mmcutils/Android.mk \
     $(commands_TWRP_local_path)/bmlutils/Android.mk \
@@ -950,7 +994,6 @@ ifeq ($(shell test $(PLATFORM_SDK_VERSION) -lt 24; echo $$?),0)
 endif
 
 ifneq ($(TW_OZIP_DECRYPT_KEY),)
-    TWRP_REQUIRED_MODULES += ozip_decrypt
     include $(commands_TWRP_local_path)/ozip_decrypt/Android.mk
 endif
 

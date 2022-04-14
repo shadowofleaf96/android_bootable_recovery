@@ -1,6 +1,9 @@
 /*
 	Copyright 2013 to 2020 TeamWin
 	This file is part of TWRP/TeamWin Recovery Project.
+	
+	Copyright 2018 ATG Droid  
+	This file is part of RWRP/RedWolf Recovery Project
 
 	TWRP is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -111,6 +114,7 @@ const struct flag_list mount_flags[] = {
 #ifdef MS_SHARED
 	{ "shared",           MS_SHARED },
 #endif
+	{ "utf8",   0 },
 	{ "sync",             MS_SYNCHRONOUS },
 	{ 0,                  0 },
 };
@@ -613,6 +617,7 @@ bool TWPartition::Process_Fstab_Line(const char *fstab_line, bool Display_Error,
 		bool mounted = Is_Mounted();
 		if (mounted || Mount(false)) {
 			// Read the backup settings file
+			DataManager::LoadPersistValues();
 			TWFunc::Fixup_Time_On_Boot("/persist/time/");
 			if (!mounted)
 				UnMount(false);
@@ -658,6 +663,11 @@ void TWPartition::Setup_Data_Partition(bool Display_Error) {
 	if (datamedia)
 		Setup_Data_Media();
 	Can_Be_Encrypted = true;
+	if (Mount(false) && TWFunc::Path_Exists("/data/unencrypted/key/version")) {
+		DataManager::SetValue(TW_IS_FBE, 1);
+		Is_FBE = true;
+		UnMount(false);
+	}
 	char crypto_blkdev[255];
 	property_get("ro.crypto.fs_crypto_blkdev", crypto_blkdev, "error");
 	if (strcmp(crypto_blkdev, "error") != 0) {
@@ -667,7 +677,8 @@ void TWPartition::Setup_Data_Partition(bool Display_Error) {
 		if (Key_Directory.empty()) {
 			Is_FBE = false;
 			DataManager::SetValue(TW_IS_FBE, 0);
-		} else {
+		}
+		else {
 			Is_FBE = true;
 			DataManager::SetValue(TW_IS_FBE, 1);
 		}
@@ -713,7 +724,7 @@ void TWPartition::Setup_Data_Partition(bool Display_Error) {
 				LOGINFO("Trying wrapped key.\n");
 				property_set("fbe.data.wrappedkey", "true");
 				if (!Decrypt_FBE_DE()) {
-					LOGINFO("Unable to decrypt device\n");
+					LOGINFO("Unable to decrypt FBE device\n");
 				}
 			}
 		}
@@ -1621,8 +1632,6 @@ bool TWPartition::UnMount(bool Display_Error) {
 	if (Mount_Point == "/system_root") {
 		if (umount("/system") == -1)
 			umount2("/system", MNT_DETACH);
-		rmdir("/system");
-		symlink("/system_root/system", "/system");
 	}
 	if (Is_Mounted()) {
 		int never_unmount_system;
@@ -1982,9 +1991,10 @@ bool TWPartition::Backup(PartitionSettings *part_settings, pid_t *tar_fork_pid) 
 }
 
 bool TWPartition::Restore(PartitionSettings *part_settings) {
+	if (DataManager::GetIntValue(PB_RUN_SURVIVAL_BACKUP) != 1) {
 	TWFunc::GUI_Operation_Text(TW_RESTORE_TEXT, Display_Name, gui_parse_text("{@restoring_hdr}"));
 	LOGINFO("Restore filename is: %s/%s\n", part_settings->Backup_Folder.c_str(), Backup_FileName.c_str());
-
+    }
 	string Restore_File_System = Get_Restore_File_System(part_settings);
 
 	if (Is_File_System(Restore_File_System))
@@ -2260,6 +2270,7 @@ bool TWPartition::Wipe_EXT4() {
 
 	char *secontext = NULL;
 
+    if (DataManager::GetIntValue(PB_RUN_SURVIVAL_BACKUP) != 1)
 	gui_msg(Msg("formatting_using=Formatting {1} using {2}...")(Display_Name)("make_ext4fs"));
 
 	if (!selinux_handle || selabel_lookup(selinux_handle, &secontext, Mount_Point.c_str(), S_IFDIR) < 0) {
@@ -2638,9 +2649,11 @@ bool TWPartition::Backup_Tar(PartitionSettings *part_settings, pid_t *tar_fork_p
 	if (!Mount(true))
 		return false;
 
+	if (DataManager::GetIntValue(PB_RUN_SURVIVAL_BACKUP) != 1) {
 	TWFunc::GUI_Operation_Text(TW_BACKUP_TEXT, Backup_Display_Name, gui_parse_text("{@backing}"));
 	gui_msg(Msg("backing_up=Backing up {1}...")(Backup_Display_Name));
-
+	}
+	
 	DataManager::GetValue(TW_USE_COMPRESSION_VAR, tar.use_compression);
 
 #ifndef TW_EXCLUDE_ENCRYPTED_BACKUPS
@@ -2693,8 +2706,10 @@ bool TWPartition::Backup_Tar(PartitionSettings *part_settings, pid_t *tar_fork_p
 bool TWPartition::Backup_Image(PartitionSettings *part_settings) {
 	string Full_FileName, adb_file_name;
 
+	if (DataManager::GetIntValue(PB_RUN_SURVIVAL_BACKUP) != 1) {
 	TWFunc::GUI_Operation_Text(TW_BACKUP_TEXT, Display_Name, gui_parse_text("{@backing}"));
 	gui_msg(Msg("backing_up=Backing up {1}...")(Backup_Display_Name));
+    }
 
 	Backup_FileName = Backup_Name + "." + Current_File_System + ".win";
 
@@ -2723,7 +2738,7 @@ bool TWPartition::Backup_Image(PartitionSettings *part_settings) {
 }
 
 bool TWPartition::Raw_Read_Write(PartitionSettings *part_settings) {
-	unsigned long long RW_Block_Size, Remain = Backup_Size;
+	unsigned long long PB_Block_Size, Remain = Backup_Size;
 	int src_fd = -1, dest_fd = -1;
 	ssize_t bs;
 	bool ret = false;
@@ -2764,12 +2779,12 @@ bool TWPartition::Raw_Read_Write(PartitionSettings *part_settings) {
 	LOGINFO("Reading '%s', writing '%s'\n", srcfn.c_str(), destfn.c_str());
 
 	if (part_settings->adbbackup) {
-		RW_Block_Size = MAX_ADB_READ;
+		PB_Block_Size = MAX_ADB_READ;
 		bs = MAX_ADB_READ;
 	}
 	else {
-		RW_Block_Size = 1048576LLU; // 1MB
-		bs = (ssize_t)(RW_Block_Size);
+		PB_Block_Size = 1048576LLU; // 1MB
+		bs = (ssize_t)(PB_Block_Size);
 	}
 
 	buffer = malloc((size_t)bs);
@@ -2782,7 +2797,7 @@ bool TWPartition::Raw_Read_Write(PartitionSettings *part_settings) {
 		part_settings->progress->SetPartitionSize(part_settings->total_restore_size);
 
 	while (Remain > 0) {
-		if (Remain < RW_Block_Size)
+		if (Remain < PB_Block_Size)
 			bs = (ssize_t)(Remain);
 		if (read(src_fd, buffer, bs) != bs) {
 			LOGINFO("Error reading source fd (%s)\n", strerror(errno));
@@ -2822,9 +2837,11 @@ exit:
 bool TWPartition::Backup_Dump_Image(PartitionSettings *part_settings) {
 	string Full_FileName, Command;
 
+	if (DataManager::GetIntValue(PB_RUN_SURVIVAL_BACKUP) != 1) {
 	TWFunc::GUI_Operation_Text(TW_BACKUP_TEXT, Display_Name, gui_parse_text("{@backing}"));
 	gui_msg(Msg("backing_up=Backing up {1}...")(Backup_Display_Name));
-
+    }
+	
 	if (part_settings->progress)
 		part_settings->progress->SetPartitionSize(Backup_Size);
 
@@ -2892,7 +2909,9 @@ bool TWPartition::Restore_Tar(PartitionSettings *part_settings) {
 		if (!Wipe_AndSec())
 			return false;
 	} else {
+		if (DataManager::GetIntValue(PB_RUN_SURVIVAL_BACKUP) != 1) {
 		gui_msg(Msg("wiping=Wiping {1}")(Backup_Display_Name));
+		}
 		if (Has_Data_Media && Mount_Point == "/data" && Restore_File_System != Current_File_System) {
 			gui_msg(Msg(msg::kWarning, "datamedia_fs_restore=WARNING: This /data backup was made with {1} file system! The backup may not boot unless you change back to {1}.")(Restore_File_System));
 			if (!Wipe_Data_Without_Wiping_Media())
@@ -2902,8 +2921,10 @@ bool TWPartition::Restore_Tar(PartitionSettings *part_settings) {
 				return false;
 		}
 	}
+	if (DataManager::GetIntValue(PB_RUN_SURVIVAL_BACKUP) != 1) {
 	TWFunc::GUI_Operation_Text(TW_RESTORE_TEXT, Backup_Display_Name, gui_parse_text("{@restoring_hdr}"));
 	gui_msg(Msg("restoring=Restoring {1}...")(Backup_Display_Name));
+     }
 
 	// Remount as read/write as needed so we can restore the backup
 	if (!ReMount_RW(true))
@@ -2956,9 +2977,11 @@ bool TWPartition::Restore_Image(PartitionSettings *part_settings) {
 	string Full_FileName;
 	string Restore_File_System = Get_Restore_File_System(part_settings);
 
+	if (DataManager::GetIntValue(PB_RUN_SURVIVAL_BACKUP) != 1) {
 	TWFunc::GUI_Operation_Text(TW_RESTORE_TEXT, Backup_Display_Name, gui_parse_text("{@restoring_hdr}"));
 	gui_msg(Msg("restoring=Restoring {1}...")(Backup_Display_Name));
-
+    }
+	
 	if (part_settings->adbbackup)
 		Full_FileName = TW_ADB_RESTORE;
 	else
@@ -3134,11 +3157,11 @@ void TWPartition::Find_Actual_Block_Device(void) {
 	}
 }
 
-void TWPartition::Recreate_Media_Folder(void) {
+void TWPartition::Recreate_Media_Folder(bool wiped) {
 	string Command;
 	string Media_Path = Mount_Point + "/media";
 
-	if (Is_FBE) {
+	if (Is_FBE && !wiped) {
 		LOGINFO("Not recreating media folder on FBE\n");
 		return;
 	}
@@ -3507,6 +3530,10 @@ void TWPartition::Set_Backup_FileName(string fname) {
 
 string TWPartition::Get_Backup_Name() {
 	return Backup_Name;
+}
+
+void TWPartition::Change_Mount_Point(string new_mp) {
+	Storage_Path = Backup_Path = Mount_Point = new_mp;
 }
 
 std::string TWPartition::Get_Backup_FileName() {

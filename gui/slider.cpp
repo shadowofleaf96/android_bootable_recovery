@@ -96,9 +96,9 @@ GUISlider::GUISlider(xml_node<>* node) : GUIObject(node)
 		}
 	}
 	if (sSliderLabel) {
-		int sTextX = mRenderX + (mRenderW / 2);
 		int w, h;
 		sSliderLabel->GetCurrentBounds(w, h);
+		int sTextX = mRenderX + (mRenderW / 2) > w ? (mRenderW / 2) : (mRenderW / 3);
 		int sTextY = mRenderY + ((mRenderH - h) / 2);
 		sSliderLabel->SetRenderPos(sTextX, sTextY);
 		sSliderLabel->SetMaxWidth(mRenderW);
@@ -129,6 +129,7 @@ GUISlider::~GUISlider()
 
 int GUISlider::Render(void)
 {
+	int ret = 0;
 	if (!isConditionTrue())
 		return 0;
 
@@ -142,14 +143,15 @@ int GUISlider::Render(void)
 	if (sSliderUsed && sSliderUsed->GetResource() && sCurTouchX > mRenderX)
 		gr_blit(sSliderUsed->GetResource(), 0, 0, sCurTouchX - mRenderX, mRenderH, mRenderX, mRenderY);
 
+	if (sSliderLabel) {
+		ret = sSliderLabel->Render();
+	}
+
 	// Draw the touch icon
 	if (sTouch && sTouch->GetResource())
 		gr_blit(sTouch->GetResource(), 0, 0, sTouchW, sTouchH, sCurTouchX, (mRenderY + ((mRenderH - sTouchH) / 2)));
 
-	if (sSliderLabel) {
-		int ret = sSliderLabel->Render();
-		if (ret < 0)		return ret;
-	}
+	if (ret < 0)		return ret;
 
 	sUpdate = 0;
 	return 0;

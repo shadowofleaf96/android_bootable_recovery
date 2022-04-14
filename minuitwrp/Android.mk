@@ -10,7 +10,7 @@ LOCAL_SRC_FILES := \
     graphics_utils.cpp \
     events.cpp
 
-ifeq ($(TW_SUPPORT_INPUT_1_2_HAPTICS),true)
+ifeq ($(PB_SUPPORT_INPUT_HAPTICS),true)
     ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 28; echo $$?),0)
         LOCAL_SHARED_LIBRARIES += android.hardware.vibrator@1.2 libhidlbase
         LOCAL_CFLAGS += -DUSE_QTI_HAPTICS
@@ -45,7 +45,13 @@ else
   LOCAL_C_INCLUDES += $(commands_recovery_local_path)/minuitwrp/include
   # The header files required for adf graphics can cause compile errors
   # with adf graphics.
-  ifneq ($(wildcard system/core/adf/Android.*),)
+  ifneq ($(wildcard system/core/adf/Android.mk),)
+    TWRP_HAS_ADF := true
+  endif
+  ifneq ($(wildcard system/core/adf/Android.bp),)
+    TWRP_HAS_ADF := true
+  endif
+  ifeq ($(TWRP_HAS_ADF), true)
     LOCAL_CFLAGS += -DHAS_ADF
     LOCAL_SRC_FILES += graphics_adf.cpp
     LOCAL_WHOLE_STATIC_LIBRARIES += libadf
@@ -56,7 +62,7 @@ ifeq ($(TW_NEW_ION_HEAP), true)
   LOCAL_CFLAGS += -DNEW_ION_HEAP
 endif
 
-ifneq ($(wildcard external/libdrm/Android.*),)
+ifneq ($(wildcard external/libdrm/Android.mk),)
   LOCAL_CFLAGS += -DHAS_DRM
   LOCAL_SRC_FILES += graphics_drm.cpp
   ifneq ($(wildcard external/libdrm/Android.common.mk),)
@@ -64,6 +70,11 @@ ifneq ($(wildcard external/libdrm/Android.*),)
   else
     LOCAL_WHOLE_STATIC_LIBRARIES += libdrm
   endif
+endif
+ifneq ($(wildcard external/libdrm/Android.bp),)
+  LOCAL_CFLAGS += -DHAS_DRM
+  LOCAL_SRC_FILES += graphics_drm.cpp
+  LOCAL_WHOLE_STATIC_LIBRARIES += libdrm
 endif
 
 LOCAL_C_INCLUDES += \

@@ -23,6 +23,8 @@
 #include <pthread.h>
 #include "infomanager.hpp"
 
+#define PERSIST_SETTINGS_FILE  "/persist/.pbrps"
+
 using namespace std;
 
 class DataManager
@@ -32,7 +34,6 @@ public:
 	static int LoadValues(const string& filename);
 	static int LoadPersistValues(void);
 	static int Flush();
-	static void LoadTWRPFolderInfo(void);
 
 	// Core get routines
 	static int GetValue(const string& varName, string& value);
@@ -64,10 +65,8 @@ public:
 	static string GetCurrentStoragePath(void);
 	static string GetSettingsStoragePath(void);
 
-public:
-	static string mBackingFile;
-
 protected:
+	static string mBackingFile;
 	static int mInitialized;
 	static InfoManager mPersist;
 	static InfoManager mData;

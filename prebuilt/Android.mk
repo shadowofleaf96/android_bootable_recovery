@@ -30,6 +30,10 @@ else
         ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 23; echo $$?),0)
             RELINK_SOURCE_FILES += $(TARGET_RECOVERY_ROOT_OUT)/sbin/dd
         endif
+	ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 27; echo $$?),0)
+            # system/core/libziparchive provides unzip
+            RELINK_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/unzip
+        else
         ifneq ($(wildcard external/unzip/Android.mk),)
             RELINK_SOURCE_FILES += $(TARGET_OUT_OPTIONAL_EXECUTABLES)/unzip
         endif
@@ -40,6 +44,7 @@ else
             RELINK_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/awk
         endif
     endif
+endif
 endif
 RELINK_SOURCE_FILES += $(TARGET_RECOVERY_ROOT_OUT)/sbin/pigz
 RELINK_SOURCE_FILES += $(TARGET_RECOVERY_ROOT_OUT)/sbin/fsck.fat
@@ -80,7 +85,7 @@ RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libext2_e2p.so
 RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libext2fs.so
 RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libext2_profile.so
 RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libext2_uuid.so
-ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 27; echo $$?),0)
+ifneq ($(wildcard external/e2fsprogs/misc/Android.bp),)
     RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libext2_misc.so
 endif
 ifneq ($(wildcard external/e2fsprogs/lib/quota/Android.mk),)
@@ -191,9 +196,6 @@ endif
 ifeq ($(TW_INCLUDE_BLOBPACK), true)
     RELINK_SOURCE_FILES += $(TARGET_RECOVERY_ROOT_OUT)/sbin/blobpack
 endif
-ifeq ($(TW_INCLUDE_INJECTTWRP), true)
-    RELINK_SOURCE_FILES += $(TARGET_RECOVERY_ROOT_OUT)/sbin/injecttwrp
-endif
 ifeq ($(TW_INCLUDE_DUMLOCK), true)
     RELINK_SOURCE_FILES += $(TARGET_RECOVERY_ROOT_OUT)/sbin/htcdumlock
 endif
@@ -246,7 +248,6 @@ ifeq ($(TW_INCLUDE_CRYPTO), true)
             ifneq ($(wildcard hardware/interfaces/confirmationui/1.0/Android.bp),)
                 RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.confirmationui@1.0.so
             endif
-
             RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libhardware_legacy.so
         else
             RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libkeymaster1.so
@@ -264,7 +265,8 @@ ifeq ($(TW_INCLUDE_CRYPTO), true)
             RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libdexfile.so
             RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libservices.so
             RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libkeymaster_portable.so
-         endif
+            RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.weaver@1.0.so
+        endif
          # lshal can be useful for seeing if you have things like the keymaster working properly, but it isn't needed for TWRP to work
          #RELINK_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/lshal
          #RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/liblshal.so
@@ -405,6 +407,11 @@ ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 27; echo $$?),0)
     RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/liblogwrap.so
     RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libext2_misc.so
 endif
+
+TW_BB_SYMLINKS :=
+ifneq ($(TW_USE_TOOLBOX), true)
+    TW_BB_SYMLINKS := busybox_symlinks
+endif
 ifneq ($(TW_EXCLUDE_NANO), true)
     RELINK_SOURCE_FILES += $(TARGET_OUT_OPTIONAL_EXECUTABLES)/nano
     RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libncurses.so
@@ -414,11 +421,6 @@ endif
 ifneq ($(TW_EXCLUDE_BASH), true)
     RELINK_SOURCE_FILES += $(TARGET_OUT_OPTIONAL_EXECUTABLES)/bash
     RELINK_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/libncurses.so
-endif
-
-TW_BB_SYMLINKS :=
-ifneq ($(TW_USE_TOOLBOX), true)
-    TW_BB_SYMLINKS := busybox_symlinks
 endif
 
 TWRP_AUTOGEN := $(intermediates)/teamwin
@@ -558,6 +560,24 @@ ifeq ($(TW_INCLUDE_DUMLOCK), true)
 	include $(BUILD_PREBUILT)
 endif
 
+#mkboot
+include $(CLEAR_VARS)
+LOCAL_MODULE := mkbootimg
+LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_CLASS := RECOVERY_EXECUTABLES
+LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
+LOCAL_SRC_FILES := $(LOCAL_MODULE)
+include $(BUILD_PREBUILT)
+
+#unpack
+include $(CLEAR_VARS)
+LOCAL_MODULE := unpackbootimg
+LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_CLASS := RECOVERY_EXECUTABLES
+LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
+LOCAL_SRC_FILES := $(LOCAL_MODULE)
+include $(BUILD_PREBUILT)
+
 ifeq ($(TW_USE_TOOLBOX), true)
     include $(CLEAR_VARS)
     LOCAL_MODULE := mkshrc_twrp
@@ -569,9 +589,9 @@ ifeq ($(TW_USE_TOOLBOX), true)
     include $(BUILD_PREBUILT)
 endif
 
-#TWRP App "placeholder"
+#Parted
 include $(CLEAR_VARS)
-LOCAL_MODULE := me.twrp.twrpapp.apk
+LOCAL_MODULE := parted
 LOCAL_MODULE_TAGS := eng
 LOCAL_MODULE_CLASS := RECOVERY_EXECUTABLES
 LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
@@ -604,8 +624,8 @@ endif
 
 ifneq (,$(filter $(TW_INCLUDE_REPACKTOOLS) $(TW_INCLUDE_RESETPROP) $(TW_INCLUDE_LIBRESETPROP), true))
     ifeq ($(wildcard external/magisk-prebuilt/Android.mk),)
-        $(warning Magisk prebuilt tools not found!)
-        $(warning Please place https://github.com/TeamWin/external_magisk-prebuilt)
+        $(warning Magisk prebuil tools not found!)
+        $(warning Please place https://github.com/PitchBlackRecoveryProject/external_magisk-prebuilt)
         $(warning into external/magisk-prebuilt)
         $(error magiskboot prebuilts not present; exiting)
     endif
@@ -642,25 +662,26 @@ LOCAL_MODULE_CLASS := ETC
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)/sbin
 LOCAL_REQUIRED_MODULES := nano libncurses
 LOCAL_POST_INSTALL_CMD += \
-    mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/sbin/etc/nano; \
-    cp -rf external/nano/etc/* external/nano/syntax/*.nanorc $(TARGET_RECOVERY_ROOT_OUT)/sbin/etc/nano/; \
-    cp -rf external/libncurses/lib/terminfo $(TARGET_RECOVERY_ROOT_OUT)/sbin/etc/;
+    cp -rf $(TARGET_OUT_OPTIONAL_EXECUTABLES)/nano $(TARGET_RECOVERY_ROOT_OUT)/sbin/nano; \
+    mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/etc/nano; \
+    cp -rf external/nano/etc/* external/nano/syntax/*.nanorc $(TARGET_RECOVERY_ROOT_OUT)/etc/nano/; \
+    cp -rf external/libncurses/lib/terminfo $(TARGET_RECOVERY_ROOT_OUT)/etc/;
 include $(BUILD_PHONY_PACKAGE)
 
 ifneq ($(TW_EXCLUDE_BASH), true)
-	include $(CLEAR_VARS)
-	LOCAL_MODULE := bash_twrp
-	LOCAL_MODULE_TAGS := optional
-	LOCAL_MODULE_CLASS := ETC
-	LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)/sbin
-	LOCAL_REQUIRED_MODULES := bash
-
+include $(CLEAR_VARS)
+LOCAL_MODULE := bash_twrp
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)/sbin
+LOCAL_REQUIRED_MODULES := bash
 LOCAL_POST_INSTALL_CMD += \
-    mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/sbin/etc/bash; \
-    cp -rf external/bash/etc/* $(TARGET_RECOVERY_ROOT_OUT)/sbin/etc/bash/; \
-    sed -i 's/ro.cm.device/ro.product.device/' $(TARGET_RECOVERY_ROOT_OUT)/sbin/etc/bash/bashrc; \
-    sed -i 's/ro.lineage.device/ro.product.device/' $(TARGET_RECOVERY_ROOT_OUT)/sbin/etc/bash/bashrc; \
-    sed -i 's/ro.omni.device/ro.product.device/' $(TARGET_RECOVERY_ROOT_OUT)/sbin/etc/bash/bashrc; \
-    sed -i '/export TERM/d' $(TARGET_RECOVERY_ROOT_OUT)/sbin/etc/bash/bashrc;
-	include $(BUILD_PHONY_PACKAGE)
+	cp -rf $(TARGET_OUT_OPTIONAL_EXECUTABLES)/bash $(TARGET_RECOVERY_ROOT_OUT)/sbin/bash; \
+	mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/etc/bash; \
+	cp -rf external/bash/etc/* $(TARGET_RECOVERY_ROOT_OUT)/etc/bash/; \
+	sed -i 's/ro.cm.device/ro.product.device/' $(TARGET_RECOVERY_ROOT_OUT)/etc/bash/bashrc; \
+	sed -i 's/ro.lineage.device/ro.product.device/' $(TARGET_RECOVERY_ROOT_OUT)/etc/bash/bashrc; \
+	sed -i 's/ro.omni.device/ro.product.device/' $(TARGET_RECOVERY_ROOT_OUT)/etc/bash/bashrc; \
+	sed -i '/export TERM/d' $(TARGET_RECOVERY_ROOT_OUT)/etc/bash/bashrc;
+include $(BUILD_PHONY_PACKAGE)
 endif

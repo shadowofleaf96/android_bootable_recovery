@@ -42,6 +42,10 @@ else
     LOCAL_SRC_FILES += hardwarekeyboard.cpp
 endif
 
+ifeq ($(AB_OTA_UPDATER),true)
+    LOCAL_CFLAGS += -DAB_OTA_UPDATER
+endif
+
 LOCAL_SHARED_LIBRARIES += libminuitwrp libc libstdc++ libaosprecovery libselinux
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 26; echo $$?),0)
     LOCAL_SHARED_LIBRARIES += libziparchive
@@ -100,16 +104,18 @@ endif
 ifeq ($(TW_SCREEN_BLANK_ON_BOOT), true)
     LOCAL_CFLAGS += -DTW_SCREEN_BLANK_ON_BOOT
 endif
+ifneq ($(PB_TORCH_PATH),)
+        LOCAL_CFLAGS += -DPB_TORCH_PATH=\"$(PB_TORCH_PATH)\"
+endif
+ifneq ($(PB_TORCH_MAX_BRIGHTNESS),)
+	LOCAL_CFLAGS += -DPB_MAX_BRIGHT_VALUE=$(PB_TORCH_MAX_BRIGHTNESS)
+endif
 ifeq ($(TW_EXCLUDE_NANO), true)
     LOCAL_CFLAGS += -DTW_EXCLUDE_NANO
-endif
-ifeq ($(AB_OTA_UPDATER),true)
-    LOCAL_CFLAGS += -DAB_OTA_UPDATER=1
 endif
 
 LOCAL_C_INCLUDES += \
     bionic \
-    system/core/base/include \
     system/core/include \
     system/core/libpixelflinger/include
 
@@ -149,12 +155,17 @@ define TW_CUSTOM_THEME_WARNING_MSG
     $(notdir $(wildcard $(LOCAL_PATH)/theme/*_*))
 ****************************************************************************
 endef
+define PB_UNSUPPORTED_RESOLUTION_ERR
+
+****************************************************************************
+  PitchBlack TWRP is not yet supported for $(TW_THEME) resolution variants
+****************************************************************************
+endef
 
 TWRP_RES := $(LOCAL_PATH)/theme/common/fonts
-TWRP_RES += $(LOCAL_PATH)/theme/common/languages
-ifeq ($(TW_EXTRA_LANGUAGES),true)
-    TWRP_RES += $(LOCAL_PATH)/theme/extra-languages/fonts
-    TWRP_RES += $(LOCAL_PATH)/theme/extra-languages/languages
+TWRP_RES += $(LOCAL_PATH)/theme/common/lang_en/languages
+ifeq ($(PB_ENGLISH),)
+TWRP_RES += $(LOCAL_PATH)/theme/common/lang_full/languages
 endif
 
 ifeq ($(TW_CUSTOM_THEME),)
@@ -175,8 +186,10 @@ ifeq ($(TW_CUSTOM_THEME),)
             ifeq ($(shell test $(GUI_WIDTH) -gt $(GUI_HEIGHT); echo $$?),0)
                 ifeq ($(shell test $(GUI_WIDTH) -ge 1280; echo $$?),0)
                     TW_THEME := landscape_hdpi
+                    $(error $(PB_UNSUPPORTED_RESOLUTION_ERR))
                 else
                     TW_THEME := landscape_mdpi
+                    $(error $(PB_UNSUPPORTED_RESOLUTION_ERR))
                 endif
             else ifeq ($(shell test $(GUI_WIDTH) -lt $(GUI_HEIGHT); echo $$?),0)
                 ifeq ($(shell test $(GUI_WIDTH) -ge 720; echo $$?),0)
@@ -187,18 +200,20 @@ ifeq ($(TW_CUSTOM_THEME),)
             else ifeq ($(shell test $(GUI_WIDTH) -eq $(GUI_HEIGHT); echo $$?),0)
                 # watch_hdpi does not yet exist
                 TW_THEME := watch_mdpi
+                $(error $(PB_UNSUPPORTED_RESOLUTION_ERR))
             endif
         endif
         endif
     endif
 
-    TWRP_THEME_LOC := $(LOCAL_PATH)/theme/$(TW_THEME)
+	TWRP_THEME_LOC := $(LOCAL_PATH)/theme/$(TW_THEME)
+    TWRP_RES += $(LOCAL_PATH)/theme/common/$(word 1,$(subst _, ,$(TW_THEME))).xml
     ifeq ($(wildcard $(TWRP_THEME_LOC)/ui.xml),)
         $(warning $(TW_THEME_WARNING_MSG))
         $(error Theme selection failed; exiting)
     endif
 
-    TWRP_RES += $(LOCAL_PATH)/theme/common/$(word 1,$(subst _, ,$(TW_THEME))).xml
+    #TWRP_RES += $(LOCAL_PATH)/theme/common/$(word 1,$(subst _, ,$(TW_THEME))).xml
     # for future copying of used include xmls and fonts:
     # UI_XML := $(TWRP_THEME_LOC)/ui.xml
     # TWRP_INCLUDE_XMLS := $(shell xmllint --xpath '/recovery/include/xmlfile/@name' $(UI_XML)|sed -n 's/[^\"]*\"\([^\"]*\)\"[^\"]*/\1\n/gp'|sort|uniq)
@@ -213,10 +228,27 @@ endif
 
 TWRP_RES += $(TW_ADDITIONAL_RES)
 
+REQUIRED_RECOVERY_SIZE := $(BOARD_RECOVERYIMAGE_PARTITION_SIZE)
+
+ifeq ($(BOARD_RECOVERYIMAGE_PARTITION_SIZE),)
+    ifeq ($(BOARD_BOOTIMAGE_PARTITION_SIZE),)
+        $(error BOARD_RECOVERYIMAGE_PARTITION_SIZE is not defined)
+    endif
+    REQUIRED_RECOVERY_SIZE := $(BOARD_BOOTIMAGE_PARTITION_SIZE)
+endif
+ifeq ($(shell test $(REQUIRED_RECOVERY_SIZE) -le 33554432; echo $$?),0)
+    $(warning Recovery Size is small discarding Special fonts)
+endif
 TWRP_RES_GEN := $(intermediates)/twrp
 $(TWRP_RES_GEN):
 	mkdir -p $(TARGET_RECOVERY_ROOT_OUT)$(TWRES_PATH)
 	cp -fr $(TWRP_RES) $(TARGET_RECOVERY_ROOT_OUT)$(TWRES_PATH)
+	if test $(REQUIRED_RECOVERY_SIZE) -le 33554432; then \
+	    rm -rf $(TARGET_RECOVERY_ROOT_OUT)$(TWRES_PATH)/fonts/DroidSansFallback.ttf; \
+	    rm -rf $(TARGET_RECOVERY_ROOT_OUT)$(TWRES_PATH)/fonts/NotoSansCJKjp-Regular.ttf; \
+	    rm -rf $(TARGET_RECOVERY_ROOT_OUT)$(TWRES_PATH)/fonts/RoboNoto-Medium.ttf; \
+	    rm -rf $(TARGET_RECOVERY_ROOT_OUT)$(TWRES_PATH)/fonts/OFL.txt; \
+	fi
 	cp -fr $(TWRP_THEME_LOC)/* $(TARGET_RECOVERY_ROOT_OUT)$(TWRES_PATH)
 
 LOCAL_GENERATED_SOURCES := $(TWRP_RES_GEN)

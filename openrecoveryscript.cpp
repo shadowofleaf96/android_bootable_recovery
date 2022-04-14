@@ -268,8 +268,8 @@ int OpenRecoveryScript::run_script_file(void) {
 					gui_msg(Msg("set_restore_opt=Setting restore options: '{1}':")(value2));
 					line_len = strlen(value2);
 					for (i=0; i<line_len; i++) {
-						if ((value2[i] == 'S' || value2[i] == 's') && Partition_List.find("/system;") != string::npos) {
-							Restore_List += "/system;";
+						if ((value2[i] == 'S' || value2[i] == 's') && Partition_List.find(PartitionManager.Get_Android_Root_Path() + ';') != string::npos) {
+							Restore_List += PartitionManager.Get_Android_Root_Path() + ';';
 							gui_msg("system=System");
 						} else if ((value2[i] == 'D' || value2[i] == 'd') && Partition_List.find("/data;") != string::npos) {
 							Restore_List += "/data;";
@@ -440,26 +440,13 @@ int OpenRecoveryScript::run_script_file(void) {
 		fclose(fp);
 		unlink(SCRIPT_FILE_TMP);
 		gui_msg("done_ors=Done processing script file");
+		if (DataManager::GetIntValue(PB_DISABLE_REBOOT_OTA) == 1) {
+			ret_val = 24;
+		}
 	} else {
 		gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(SCRIPT_FILE_TMP)(
 			strerror(errno)));
 		return 1;
-	}
-
-	if (install_cmd && DataManager::GetIntValue(TW_HAS_INJECTTWRP) == 1 &&
-	DataManager::GetIntValue(TW_INJECT_AFTER_ZIP) == 1) {
-		gui_msg("injecttwrp=Injecting TWRP into boot image...");
-		TWPartition* Boot = PartitionManager.Find_Partition_By_Path("/boot");
-		if (Boot == NULL || Boot->Current_File_System != "emmc")
-			TWFunc::Exec_Cmd(
-			"injecttwrp --dump /tmp/backup_recovery_ramdisk.img /tmp/injected_boot.img --flash");
-		else {
-			string injectcmd =
-			"injecttwrp --dump /tmp/backup_recovery_ramdisk.img /tmp/injected_boot.img --flash bd=" +
-			Boot->Actual_Block_Device;
-			TWFunc::Exec_Cmd(injectcmd.c_str());
-		}
-		gui_msg("done=Done.");
 	}
 	if (sideload)
 		ret_val = 1;  // Forces booting to the home page after sideload
@@ -573,7 +560,7 @@ int OpenRecoveryScript::Backup_Command(string Options) {
 	line_len = Options.size();
 	for (i=0; i<line_len; i++) {
 		if (Options.substr(i, 1) == "S" || Options.substr(i, 1) == "s") {
-			Backup_List += "/system;";
+			Backup_List += PartitionManager.Get_Android_Root_Path() + ';';
 			gui_msg("system=System");
 		} else if (Options.substr(i, 1) == "D" || Options.substr(i, 1) == "d") {
 			Backup_List += "/data;";
@@ -641,14 +628,15 @@ void OpenRecoveryScript::Run_OpenRecoveryScript(void) {
 
 // this is called by the "openrecoveryscript" GUI action called via action page from Run_OpenRecoveryScript
 int OpenRecoveryScript::Run_OpenRecoveryScript_Action() {
-	int op_status = 1;
+	int op_status = 1, ret;
 	// Check for the SCRIPT_FILE_TMP first as these are AOSP recovery commands
 	// that we converted to ORS commands during boot in recovery.cpp.
 	// Run those first.
 	int reboot = 0;
 	if (TWFunc::Path_Exists(SCRIPT_FILE_TMP)) {
 		gui_msg("running_recovery_commands=Running Recovery Commands");
-		if (OpenRecoveryScript::run_script_file() == 0) {
+		ret = OpenRecoveryScript::run_script_file();
+		if (ret == 0) {
 			reboot = 1;
 			op_status = 0;
 		}
@@ -656,17 +644,27 @@ int OpenRecoveryScript::Run_OpenRecoveryScript_Action() {
 	// Check for the ORS file in /cache and attempt to run those commands.
 	if (OpenRecoveryScript::check_for_script_file()) {
 		gui_msg("running_ors=Running OpenRecoveryScript");
-		if (OpenRecoveryScript::run_script_file() == 0) {
+		ret = OpenRecoveryScript::run_script_file();
+		if (ret == 0) {
 			reboot = 1;
 			op_status = 0;
 		}
 	}
-	if (reboot) {
+	if (reboot || ret == 24) {
 		// Disable stock recovery reflashing
 		TWFunc::Disable_Stock_Recovery_Replace();
-		usleep(2000000); // Sleep for 2 seconds before rebooting
-		TWFunc::tw_reboot(rb_system);
-		usleep(5000000); // Sleep for 5 seconds to allow reboot to occur
+		TWFunc::Deactivation_Process();
+		if (ret == 24)
+		{
+			gui_process("pb_disable_reboot_ota_check=Disable Rebooting after OTA");
+			op_status = 0;
+			DataManager::SetValue("tw_page_done", 1);
+		}
+		else {
+			usleep(2000000); // Sleep for 2 seconds before rebooting
+			TWFunc::tw_reboot(rb_system);
+			usleep(5000000); // Sleep for 5 seconds to allow reboot to occur
+		}
 	} else {
 		DataManager::SetValue("tw_page_done", 1);
 	}
