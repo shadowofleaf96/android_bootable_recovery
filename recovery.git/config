@@ -1,0 +1,13 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+[filter "lfs"]
+	smudge = git-lfs smudge --skip -- %f
+	process = git-lfs filter-process --skip
+[remote "TeamWin"]
+	url = https://github.com/TeamWin/android_bootable_recovery
+	review = https://gerrit.twrp.me
+	projectname = android_bootable_recovery
+	fetch = +refs/heads/*:refs/remotes/TeamWin/*
+[gc]
+	autoDetach = false
