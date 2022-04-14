@@ -128,7 +128,6 @@ public:
 	// NotifyVarChange - Notify of a variable change
 	//  Returns 0 on success, <0 on error
 	virtual int NotifyVarChange(const std::string& varName, const std::string& value);
-	bool UpdateAllConditions();
 
 protected:
 	class Condition
@@ -289,9 +288,8 @@ protected:
 	ThreadType getThreadType(const Action& action);
 	void simulate_progress_bar(void);
 	int flash_zip(std::string filename, int* wipe_cache);
-	void backup_before_flash();
-	int reinject_after_flash();
 	int ozip_decrypt(std::string zip_path);
+	void reinject_after_flash();
 	void operation_start(const string operation_name);
 	void operation_end(const int operation_status);
 	time_t Start;
@@ -310,7 +308,6 @@ protected:
 	int reload(std::string arg);
 	int readBackup(std::string arg);
 	int set(std::string arg);
-	int exten(std::string arg);
 	int clear(std::string arg);
 	int mount(std::string arg);
 	int unmount(std::string arg);
@@ -334,8 +331,6 @@ protected:
 
 	// (originally) threaded actions
 	int fileexists(std::string arg);
-	int keypressed();
-	int keycheck(std::string zip, int w = 0);
 	int flash(std::string arg);
 	int wipe(std::string arg);
 	int refreshsizes(std::string arg);
@@ -350,6 +345,7 @@ protected:
 	int cmd(std::string arg);
 	int terminalcommand(std::string arg);
 	int killterminal(std::string arg);
+	int reinjecttwrp(std::string arg);
 	int checkbackupname(std::string arg);
 	int decrypt(std::string arg);
 	int adbsideload(std::string arg);
@@ -370,23 +366,17 @@ protected:
 	int setlanguage(std::string arg);
 	int togglebacklight(std::string arg);
 	int twcmd(std::string arg);
-	int flashlight(std::string arg);
 	int setbootslot(std::string arg);
-	int readfile(std::string arg);
 	int installapp(std::string arg);
-	int unpack(std::string arg);
-        int repack(std::string arg);
+	int uninstalltwrpsystemapp(std::string arg);
 	int repackimage(std::string arg);
 	int reflashtwrp(std::string arg);
 	int fixabrecoverybootloop(std::string arg);
-	int change_codename(std::string arg);
-	int getprop(std::string arg);
-	int flush_up_console(std::string arg);
-	int change_root(std::string arg);
-	int change_terminal(std::string arg);
+	int changeterminal(std::string arg);
 #ifndef TW_EXCLUDE_NANO
 	int editfile(std::string arg);
 #endif
+	int applycustomtwrpfolder(std::string arg);
 
 	int simulate;
 };
@@ -427,7 +417,6 @@ protected:
 	bool hasFill;
 	COLOR mFillColor;
 	COLOR mHighlightColor;
-	Placement LText;
 	Placement TextPlacement;
 };
 
@@ -504,7 +493,7 @@ protected:
 	virtual void NotifySelect(size_t item_selected __unused) {}
 
 	// render a standard-layout list item with optional icon and text
-	void RenderStdItem(int yPos, bool selected, ImageResource* icon, const char* text, const char* textDesc = "", int iconAndTextH = 0, FontResource* nFont = NULL);
+	void RenderStdItem(int yPos, bool selected, ImageResource* icon, const char* text, int iconAndTextH = 0);
 
 	enum { NO_ITEM = (size_t)-1 };
 	// returns item index at coordinates or NO_ITEM if there is no item there
@@ -544,15 +533,11 @@ protected:
 
 	// Per-item layout
 	FontResource* mFont;
-	FontResource* mDescFont;
 	COLOR mFontColor;
-	COLOR mDescFontColor;
 	bool hasHighlightColor; // indicates if a highlight color was set
 	COLOR mHighlightColor; // background row highlight color
 	COLOR mFontHighlightColor;
 	int mFontHeight;
-	int mDescFontHeight;
-	int mDescSpacing;
 	int actualItemHeight; // Actual height of each item in pixels including max icon size, font size, and padding
 	int maxIconWidth, maxIconHeight; // max icon width and height for the list, set by derived class in SetMaxIconSize
 	int mItemSpacing; // stores the spacing or padding on the y axis, part of the actualItemHeight
@@ -636,10 +621,7 @@ protected:
 	int mShowNavFolders; // indicates if the list should include the "up a level" item and allow you to traverse folders (nav folders are disabled for the restore list, for instance)
 	static int mSortOrder; // must be static because it is used by the static function fileSort
 	ImageResource* mFolderIcon;
-	ImageResource* mFolderUpIcon;
 	ImageResource* mFileIcon;
-	ImageResource* mImgIcon;
-	ImageResource* mZipIcon;
 	bool updateFileList;
 };
 
@@ -671,9 +653,6 @@ protected:
 		std::string variableValue;
 		unsigned int selected;
 		GUIAction* action;
-		std::string textDesc;
-		ImageResource* mIconSelected;
-		FontResource* mFont;
 		std::vector<Condition> mConditions;
 	};
 
@@ -833,6 +812,8 @@ public:
 	virtual size_t GetItemCount();
 	virtual void RenderItem(size_t itemindex, int yPos, bool selected);
 	virtual void NotifySelect(size_t item_selected);
+	bool status();
+	void stop();
 protected:
 	void InitAndResize();
 

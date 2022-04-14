@@ -18,9 +18,6 @@
 #include <string.h>
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
-extern "C" {
-#include "../twcommon.h"
-}
 #define _FILE_OFFSET_BITS 64
 //extern "C" __int64 __cdecl _ftelli64(FILE*);
 
@@ -88,7 +85,7 @@ int main(int argc, char* argv[])
 
 	if (argc != 3)
 	{
-		LOGINFO("Usage: ozipdecrypt key [*.ozip]\n");
+		printf("Usage: ozipdecrypt key [*.ozip]\n");
 		return 0;
 	}
 	const char* key = argv[1];
@@ -101,27 +98,26 @@ int main(int argc, char* argv[])
 	const char* destpath= temp.c_str();
 	if (strcmp(magic, "OPPOENCRYPT!") != 0)
 	{
-		LOGINFO("This is not an .ozip file!\n");
+		printf("This is not an .ozip file!\n");
 		fclose(fp);
 		int rencheck = rename(path, destpath);
 		if (rencheck == 0) {
-			LOGINFO("Renamed .ozip file in .zip file\n");
+			printf("Renamed .ozip file in .zip file\n");
 		}
 		else
 		{
-			LOGINFO("Unable to rename .ozip file in .zip file\n");
-			return -1;
+			printf("Unable to rename .ozip file in .zip file\n");
 		}
 		return 0;
 	}
 	if (testkey(key, path) == false)
 	{
-		LOGINFO("Key is not good!\n");
+		printf("Key is not good!\n");
 		fclose(fp);
-		return -2;
+		return 0;
 	}
 	else {
-		LOGINFO("Key is good!\n");
+		printf("Key is good!\n");
 	}
 	FILE* fp2 = fopen(destpath, "wb");
 	fseek(fp, 0L, SEEK_END);
@@ -129,7 +125,7 @@ int main(int argc, char* argv[])
 	fseek(fp, 4176, SEEK_SET);
 	int bdata[16384];
 	unsigned long int sizeseek;
-	LOGINFO("Decrypting...\n");
+	printf("Decrypting...\n");
 	while (true)
 	{
 		unsigned char data[17];
@@ -148,7 +144,7 @@ int main(int argc, char* argv[])
 			fwrite(bdata, sizeof(char), 16384, fp2);
 		}
 	}
-	LOGINFO("File succesfully decrypted, saved in %s\n", destpath);
+	printf("File succesfully decrypted, saved in %s\n", destpath);
 	fclose(fp2);
 	fclose(fp);
 	return 0;

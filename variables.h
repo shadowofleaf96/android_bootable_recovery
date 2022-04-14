@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2007 The Android Open Source Project
- * Copyright (C) 2018 ATG Droid
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +17,11 @@
 #ifndef _VARIABLES_HEADER_
 #define _VARIABLES_HEADER_
 
-#define PB_MAIN_VERSION              "3.1.0"
-#define PB_BUILD PB_MAIN_VERSION PB_MAIN_BUILD
-#define PB_DEVICE               PB_DEVICE_MODEL
-
-#define TW_DEVICE_VERSION	   PB_BUILD
-
-#define TW_MAIN_VERSION_STR       "3.6.1"
-#define TW_VERSION_STR TW_MAIN_VERSION_STR PB_MAIN_BUILD
-
+#define TW_MAIN_VERSION_STR       "3.6.1_9"
+#define TW_VERSION_STR TW_MAIN_VERSION_STR TW_DEVICE_VERSION
+#define TW_SETTINGS_FILE            ".twrps"
+#define TW_RECOVERY_NAME            "TWRP"
+#define TW_DEFAULT_RECOVERY_FOLDER  "/" TW_RECOVERY_NAME
 #define TW_USE_COMPRESSION_VAR      "tw_use_compression"
 #define TW_FILENAME                 "tw_filename"
 #define TW_ZIP_INDEX                "tw_zip_index"
@@ -76,7 +71,6 @@
 #define TW_ZIP_INTERNAL_VAR         "tw_zip_internal"
 #define TW_ZIP_EXTERNAL_VAR         "tw_zip_external"
 #define TW_DISABLE_FREE_SPACE_VAR   "tw_disable_free_space"
-#define TW_CHECK_DIGEST_AFTER_BACKUP "tw_check_digest_after_backup"
 #define TW_FORCE_DIGEST_CHECK_VAR   "tw_force_digest_check"
 #define TW_SKIP_DIGEST_CHECK_VAR    "tw_skip_digest_check"
 #define TW_SKIP_DIGEST_GENERATE_VAR "tw_skip_digest_generate"
@@ -87,6 +81,7 @@
 #define TW_RM_RF_VAR                "tw_rm_rf"
 
 #define TW_BACKUPS_FOLDER_VAR       "tw_backups_folder"
+#define TW_RECOVERY_FOLDER_VAR      "tw_recovery_folder"
 
 #define TW_SDEXT_SIZE               "tw_sdext_size"
 #define TW_SWAP_SIZE                "tw_swap_size"
@@ -149,6 +144,7 @@
 #define TW_MILITARY_TIME            "tw_military_time"
 #define TW_USE_SHA2                 "tw_use_sha2"
 #define TW_NO_SHA2                  "tw_no_sha2"
+#define TW_UNMOUNT_SYSTEM           "tw_unmount_system"
 #define TW_AUTO_REFLASHTWRP_VAR     "tw_auto_reflashtwrp"
 
 // Theme versioning
@@ -156,41 +152,6 @@
 // version 4 adds listbox support to reboot page
 // version 5 adds File Manager options, nano & Flash Current TWRP
 #define TW_THEME_VERSION 5
-
-// PitchBlack Variables
-#define PB_SURVIVAL_BACKUP          "OTA"
-#define PB_SURVIVAL_BACKUP_NAME       "pb_survival_backup_folder_name"
-#define PB_SURVIVAL_FOLDER      "/sdcard/PB"
-#define PB_SURVIVAL_BACKUP       "OTA"
-#define PB_FILES_BACKUPS_FOLDER_VAR       "pb_files_backup_folder_var"
-#define PB_DISABLE_BOOT_CHK       "pb_disable_boot_check"
-#define PB_DO_SYSTEM_ON_OTA       "pb_include_system_survival"
-#define PB_ACTUAL_BUILD_VAR              "pb_actual_build"
-#define PB_INCREMENTAL_PACKAGE          "pb_support_miui_ota"
-#define PB_MIUI_ZIP_TMP                    "pb_miui_zip_tmp"
-#define PB_LOADED_FINGERPRINT                    "pb_loaded_singature"
-#define PB_INCREMENTAL_OTA_FAIL                 "pb_ota_fail"
-#define PB_RUN_SURVIVAL_BACKUP                 "pb_run_survival_backup"
-#define PB_METADATA_PRE_BUILD                 "pb_pre_build"
-#define PB_INSTALL_PREBUILT_ZIP       "pb_install_built_in_zip"
-#define PB_CALL_DEACTIVATION         "pb_call_deactivation_process"
-#define PB_MIN_EXPECTED_FP_SIZE 30
-#define PB_DISABLE_SECURE_BOOT           "pb_reboot_disable_secure_boot"
-#define PB_DISABLE_FORCED_ENCRYPTION           "pb_forced_encryption_check"
-#define PB_ENABLE_ADVANCE_ENCRY		"pb_advance_encry"
-#define PB_DISABLE_DM_VERITY           "pb_dm_verity_check"
-#define PB_SURVIVAL_FOLDER_VAR      "pb_survival_backup_folder_path"
-#define PB_TMP_SCRIPT_DIR       "pb_tmp_script_directory"
-#define PB_COMPATIBILITY_DEVICE         "pb_compatibility_pb_device"
-#define PB_ADVANCED_STOCK_REPLACE           "pb_reboot_advanced_stock_recovery_check"
-#define PB_DISABLE_REBOOT_OTA	"pb_disable_reboot_ota"
-#define PB_MOUNT_SYSTEM_AS_ROOT "pb_mount_system_as_root"
-#define TRB_EN "0"
-#define STD "0"
-#define NON_STD "0"
-#define PB_TREBLE_COMP "pb_error_treble"
-#define PB_PROP_VALUE "pb_prop_value"
-#define PB_PROP_DEVICE "ro.product.device"
 
 // Also used:
 //   tw_boot_is_mountable

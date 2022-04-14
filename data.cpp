@@ -1,9 +1,6 @@
 /*
-	Copyright 2012 to 2019 TeamWin
+	Copyright 2012 to 2016 bigbiff/Dees_Troy TeamWin
 	This file is part of TWRP/TeamWin Recovery Project.
-
-	Copyright 2018 ATG Droid  
-	This file is part of RWRP/RedWolf Recovery Project
 
 	TWRP is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -276,44 +273,6 @@ int DataManager::LoadValues(const string& filename)
 	return 0;
 }
 
-int DataManager::LoadPersistValues(void)
-{
-	static bool loaded = false;
-	string dev_id;
-
-	// Only run this function once, and make sure normal settings file has not yet been read
-	if (loaded || !mBackingFile.empty() || !TWFunc::Path_Exists(PERSIST_SETTINGS_FILE))
-		return -1;
-
-	LOGINFO("Attempt to load settings from /persist settings file...\n");
-
-	if (!mInitialized)
-		SetDefaultValues();
-
-	GetValue("device_id", dev_id);
-	mPersist.SetFile(PERSIST_SETTINGS_FILE);
-	mPersist.SetFileVersion(FILE_VERSION);
-
-	// Read in the file, if possible
-	pthread_mutex_lock(&m_valuesLock);
-	mPersist.LoadValues();
-
-#ifndef TW_NO_SCREEN_TIMEOUT
-	blankTimer.setTime(mPersist.GetIntValue("tw_screen_timeout_secs"));
-#endif
-
-	update_tz_environment_variables();
-	TWFunc::Set_Brightness(GetStrValue("tw_brightness"));
-
-	pthread_mutex_unlock(&m_valuesLock);
-
-	/* Don't set storage nor backup paths this early */
-
-	loaded = true;
-
-	return 0;
-}
-
 int DataManager::Flush()
 {
 	return SaveValues();
@@ -322,15 +281,6 @@ int DataManager::Flush()
 int DataManager::SaveValues()
 {
 #ifndef TW_OEM_BUILD
-	if (PartitionManager.Mount_By_Path("/persist", false)) {
-		mPersist.SetFile(PERSIST_SETTINGS_FILE);
-		mPersist.SetFileVersion(FILE_VERSION);
-		pthread_mutex_lock(&m_valuesLock);
-		mPersist.SaveValues();
-		pthread_mutex_unlock(&m_valuesLock);
-		LOGINFO("Saved settings file values to %s\n", PERSIST_SETTINGS_FILE);
-	}
-
 	if (mBackingFile.empty())
 		return -1;
 
@@ -439,11 +389,6 @@ int DataManager::GetIntValue(const string& varName)
 	string retVal;
 
 	GetValue(varName, retVal);
-
-	if (retVal == "true")
-		return 1;
-	else if (retVal == "false")
-		return 0;
 	return atoi(retVal.c_str());
 }
 
@@ -581,7 +526,7 @@ void DataManager::SetBackupFolder()
 {
 	string str = GetCurrentStoragePath();
 	TWPartition* partition = PartitionManager.Find_Partition_By_Path(str);
-	str += "/PBRP/BACKUPS/";
+	str += TWFunc::Check_For_TwrpFolder() + "/BACKUPS/";
 
 	string dev_id;
 	GetValue("device_id", dev_id);
@@ -632,7 +577,7 @@ void DataManager::SetDefaultValues()
 	mConst.SetValue("true", "1");
 	mConst.SetValue("false", "0");
 
-	mConst.SetValue(TW_VERSION_VAR, PB_BUILD);
+	mConst.SetValue(TW_VERSION_VAR, TW_VERSION_STR);
 
 #ifndef TW_NO_HAPTICS
 	mPersist.SetValue("tw_button_vibrate", "80");
@@ -668,9 +613,11 @@ void DataManager::SetDefaultValues()
 	mConst.SetValue(TW_SHOW_DUMLOCK, "0");
 #endif
 
+	mData.SetValue(TW_RECOVERY_FOLDER_VAR, TW_DEFAULT_RECOVERY_FOLDER);
+
 	str = GetCurrentStoragePath();
 	mPersist.SetValue(TW_ZIP_LOCATION_VAR, str);
-	str += "/PBRP/BACKUPS/";
+	str += DataManager::GetStrValue(TW_RECOVERY_FOLDER_VAR) + "/BACKUPS/";
 
 	string dev_id;
 	mConst.GetValue("device_id", dev_id);
@@ -760,20 +707,17 @@ void DataManager::SetDefaultValues()
 #ifdef TW_INCLUDE_INJECTTWRP
 	printf("TW_INCLUDE_INJECTTWRP := true\n");
 	mConst.SetValue(TW_HAS_INJECTTWRP, "1");
+	mPersist(TW_INJECT_AFTER_ZIP, "1");
 #else
 	mConst.SetValue(TW_HAS_INJECTTWRP, "0");
 #endif
 #ifdef TW_HAS_DOWNLOAD_MODE
 	printf("TW_HAS_DOWNLOAD_MODE := true\n");
 	mConst.SetValue(TW_DOWNLOAD_MODE, "1");
-#else
-	mData.SetValue(TW_DOWNLOAD_MODE, "0");
 #endif
 #ifdef TW_HAS_EDL_MODE
 	printf("TW_HAS_EDL_MODE := true\n");
 	mConst.SetValue(TW_EDL_MODE, "1");
-#else
-	mData.SetValue(TW_EDL_MODE, "0");
 #endif
 #ifdef TW_INCLUDE_CRYPTO
 	mConst.SetValue(TW_HAS_CRYPTO, "1");
@@ -794,57 +738,9 @@ void DataManager::SetDefaultValues()
 	mConst.SetValue(TW_MIN_SYSTEM_VAR, TW_MIN_SYSTEM_SIZE);
 	mData.SetValue(TW_BACKUP_NAME, "(Auto Generate)");
 
-     	mData.SetValue(PB_RUN_SURVIVAL_BACKUP, "0");
-	mData.SetValue(PB_METADATA_PRE_BUILD, "0");
-	mData.SetValue(PB_INCREMENTAL_OTA_FAIL, "0");
-	mData.SetValue(PB_LOADED_FINGERPRINT, "0");
-        mData.SetValue(PB_MIUI_ZIP_TMP, "0");
-	mPersist.SetValue(PB_DISABLE_BOOT_CHK, "0");
-	mPersist.SetValue(PB_DO_SYSTEM_ON_OTA, "1");
-	mPersist.SetValue("pb_verify_incremental_ota_signature", "1");
-	mPersist.SetValue(PB_INCREMENTAL_PACKAGE, "0");
-	mPersist.SetValue(PB_DISABLE_FORCED_ENCRYPTION, "0");
-	mPersist.SetValue(PB_ENABLE_ADVANCE_ENCRY, "0");
-#ifdef PB_DISABLE_DEFAULT_DM_VERITY
-	mPersist.SetValue(PB_DISABLE_DM_VERITY, "0");
-#else
-	mPersist.SetValue(PB_DISABLE_DM_VERITY, "1");
-#endif
-#ifdef PB_DISABLE_DEFAULT_TREBLE_COMP
-	mPersist.SetValue(PB_TREBLE_COMP, "1");
-#else
-	mPersist.SetValue(PB_TREBLE_COMP, "0");
-#endif
-
-#ifdef PB_DONT_MOUNT_SYSTEM_AS_ROOT
-	mPersist.SetValue(PB_MOUNT_SYSTEM_AS_ROOT, "0");
-#else
-	mPersist.SetValue(PB_MOUNT_SYSTEM_AS_ROOT, "1");
-#endif
-	mPersist.SetValue(PB_DISABLE_REBOOT_OTA, "0");
-	mConst.SetValue(PB_SURVIVAL_FOLDER_VAR, PB_SURVIVAL_FOLDER);
-     	mConst.SetValue(PB_SURVIVAL_BACKUP_NAME, PB_SURVIVAL_BACKUP);
-     	mConst.SetValue(PB_ACTUAL_BUILD_VAR, PB_BUILD);
-    	mConst.SetValue(PB_TMP_SCRIPT_DIR, "/tmp/pb");  
-	mConst.SetValue(PB_COMPATIBILITY_DEVICE, PB_DEVICE); 
-	mData.SetValue(PB_INSTALL_PREBUILT_ZIP, "0");
-	mData.SetValue(PB_CALL_DEACTIVATION, "0");
-	mPersist.SetValue(PB_DISABLE_SECURE_BOOT, "0");
-	mPersist.SetValue(PB_ADVANCED_STOCK_REPLACE, "1");
-	mPersist.SetValue("pb_bright_value", "255");
-	mData.SetValue("pb_torch_on", "0");
-	mData.SetValue("pb_include_logs_after_flash", "0");
-	mData.SetValue("pb_include_dmesg_logging", "0");
-#ifdef PB_MAX_BRIGHT_VALUE
-	mConst.SetValue("pb_torch_brightness_slider", "0");
-#endif
-	mData.SetValue("tw_install_reboot_recovery", "0");
-	mPersist.SetValue("tw_inject_after_flash", "0");
-
 	mPersist.SetValue(TW_INSTALL_REBOOT_VAR, "0");
 	mPersist.SetValue(TW_SIGNED_ZIP_VERIFY_VAR, "0");
 	mPersist.SetValue(TW_DISABLE_FREE_SPACE_VAR, "0");
-	mPersist.SetValue(TW_CHECK_DIGEST_AFTER_BACKUP, "0");
 	mPersist.SetValue(TW_FORCE_DIGEST_CHECK_VAR, "0");
 	mPersist.SetValue(TW_USE_COMPRESSION_VAR, "0");
 	mPersist.SetValue(TW_TIME_ZONE_VAR, "CST6CDT,M3.2.0,M11.1.0");
@@ -859,7 +755,7 @@ void DataManager::SetDefaultValues()
 	mPersist.SetValue(TW_TIME_ZONE_GUISEL, "CST6;CDT,M3.2.0,M11.1.0");
 	mPersist.SetValue(TW_TIME_ZONE_GUIOFFSET, "0");
 	mPersist.SetValue(TW_TIME_ZONE_GUIDST, "1");
-	mPersist.SetValue(TW_AUTO_REFLASHTWRP_VAR, "0");
+        mPersist.SetValue(TW_AUTO_REFLASHTWRP_VAR, "0");
 
 	mData.SetValue(TW_ACTION_BUSY, "0");
 	mData.SetValue("tw_wipe_cache", "0");
@@ -883,8 +779,7 @@ void DataManager::SetDefaultValues()
 #else
 	mPersist.SetValue(TW_NO_SHA2, "1");
 #endif
-        mPersist.SetValue(TRB_EN, "0");
-        mPersist.SetValue(STD, "0");
+	mPersist.SetValue(TW_UNMOUNT_SYSTEM, "1");
 
 #if defined BOARD_USES_RECOVERY_AS_BOOT && defined BOARD_BUILD_SYSTEM_ROOT_IMAGE
 	mConst.SetValue("tw_uses_initramfs", "1");
@@ -1017,11 +912,13 @@ void DataManager::SetDefaultValues()
 #ifdef TW_OEM_BUILD
 	LOGINFO("TW_OEM_BUILD := true\n");
 	mConst.SetValue("tw_oem_build", "1");
+	mConst.SetValue("tw_app_installed_in_system", "0");
 #else
 	mConst.SetValue("tw_oem_build", "0");
-	mPersist.SetValue("tw_app_prompt", "0");
-	mPersist.SetValue("tw_app_install_system", "0");
+	mPersist.SetValue("tw_app_prompt", "1");
+	mPersist.SetValue("tw_app_install_system", "1");
 	mData.SetValue("tw_app_install_status", "0"); // 0 = no status, 1 = not installed, 2 = already installed
+	mData.SetValue("tw_app_installed_in_system", "0");
 #endif
 #ifndef TW_EXCLUDE_NANO
 	mConst.SetValue("tw_include_nano", "1");
@@ -1030,7 +927,15 @@ void DataManager::SetDefaultValues()
 	mConst.SetValue("tw_include_nano", "0");
 #endif
 
+	mData.SetValue("tw_flash_both_slots", "0");
+	mData.SetValue("tw_is_slot_part", "0");
+
 	mData.SetValue("tw_enable_adb_backup", "0");
+
+	if (TWFunc::Path_Exists("/sbin/logcat"))
+		mConst.SetValue("tw_logcat_exists", "1");
+	else
+		mConst.SetValue("tw_logcat_exists", "0");
 
 	if (TWFunc::Path_Exists("/sbin/magiskboot"))
 		mConst.SetValue("tw_has_repack_tools", "1");
@@ -1215,8 +1120,8 @@ void DataManager::ReadSettingsFile(void)
 
 	memset(mkdir_path, 0, sizeof(mkdir_path));
 	memset(settings_file, 0, sizeof(settings_file));
-	sprintf(mkdir_path, "%s/PBRP", GetSettingsStoragePath().c_str());
-	sprintf(settings_file, "%s/.pbrps", mkdir_path);
+	sprintf(mkdir_path, "%s%s", GetSettingsStoragePath().c_str(), GetStrValue(TW_RECOVERY_FOLDER_VAR).c_str());
+	sprintf(settings_file, "%s/%s", mkdir_path, TW_SETTINGS_FILE);
 
 	if (!PartitionManager.Mount_Settings_Storage(false))
 	{
@@ -1255,4 +1160,12 @@ void DataManager::Vibrate(const string& varName)
 		vibrate(vib_value);
 	}
 #endif
+}
+
+
+void DataManager::LoadTWRPFolderInfo(void)
+{
+	string mainPath = GetCurrentStoragePath();
+	SetValue(TW_RECOVERY_FOLDER_VAR, TWFunc::Check_For_TwrpFolder());
+	mBackingFile = mainPath + GetStrValue(TW_RECOVERY_FOLDER_VAR) + '/' + TW_SETTINGS_FILE;
 }

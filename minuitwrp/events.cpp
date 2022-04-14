@@ -135,17 +135,17 @@ int vibrate(int timeout_ms)
     char tout[6];
     sprintf(tout, "%i", timeout_ms);
 
-#ifndef USE_QTI_HAPTICS
-    if (std::ifstream(LEDS_HAPTICS_ACTIVATE_FILE).good()) {
-        write_to_file(LEDS_HAPTICS_DURATION_FILE, std::to_string(timeout_ms));
-        write_to_file(LEDS_HAPTICS_ACTIVATE_FILE, "1");
-    } else
-        write_to_file(VIBRATOR_TIMEOUT_FILE, std::to_string(timeout_ms));
-#else
+#ifdef USE_QTI_HAPTICS
     android::sp<android::hardware::vibrator::V1_2::IVibrator> vib = android::hardware::vibrator::V1_2::IVibrator::getService();
     if (vib != nullptr) {
         vib->on((uint32_t)timeout_ms);
     }
+#else
+    if (std::ifstream(LEDS_HAPTICS_ACTIVATE_FILE).good()) {
+        write_to_file(LEDS_HAPTICS_DURATION_FILE, tout);
+        write_to_file(LEDS_HAPTICS_ACTIVATE_FILE, "1");
+    } else
+        write_to_file(VIBRATOR_TIMEOUT_FILE, tout);
 #endif
     return 0;
 }

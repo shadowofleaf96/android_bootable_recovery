@@ -68,7 +68,7 @@ GUIAnimation::GUIAnimation(xml_node<>* node) : GUIObject(node)
 		mFPS = LoadAttrInt(child, "fps", mFPS);
 		mRender = LoadAttrInt(child, "render", mRender);
 	}
-	if (mFPS > 60)  mFPS = 60;
+	if (mFPS > 30)  mFPS = 30;
 
 	child = FindNode(node, "loop");
 	if (child)
@@ -126,8 +126,9 @@ int GUIAnimation::Update(void)
 	if (mLoop == -2)		return 0;
 
 	// Determine if we need the next frame yet...
-	for (mUpdateCount = 0; mUpdateCount <= mFPS; mUpdateCount++)
+	if (++mUpdateCount > 30 / mFPS)
 	{
+		mUpdateCount = 0;
 		if (++mFrame >= mAnimation->GetResourceCount())
 		{
 			if (mLoop < 0)

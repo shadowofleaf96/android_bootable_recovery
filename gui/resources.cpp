@@ -426,11 +426,6 @@ void ResourceManager::LoadResources(xml_node<>* resList, ZipWrap* pZip, std::str
 			error = true;
 		}
 
-		if (child->first_attribute("ignorable")) {
-			if (!strncmp(child->first_attribute("ignorable")->value(), "1", 1))
-				error =false;
-		}
-
 		if (error)
 		{
 			std::string res_name;

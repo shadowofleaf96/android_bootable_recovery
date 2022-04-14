@@ -50,7 +50,6 @@ struct COLOR {
 struct language_struct {
 	std::string filename;
 	std::string displayvalue;
-	std::string font;
 };
 
 inline bool operator < (const language_struct& language1, const language_struct& language2)

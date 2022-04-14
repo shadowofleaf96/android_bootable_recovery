@@ -385,6 +385,14 @@ public:
 				output(buffer[i]);
 	}
 
+	bool status() {
+		return pty.started();
+	}
+
+	void stop() {
+		pty.stop();
+	}
+
 	void clear()
 	{
 		cursorX = cursorY = 0;
@@ -896,6 +904,17 @@ void GUITerminal::RenderItem(size_t itemindex, int yPos, bool selected __unused)
 void GUITerminal::NotifySelect(size_t item_selected __unused)
 {
 	// do nothing - terminal ignores selections
+}
+
+bool GUITerminal::status()
+{
+	return engine->status();
+}
+
+void GUITerminal::stop()
+{
+	engine->stop();
+	engine->clear();
 }
 
 void GUITerminal::InitAndResize()

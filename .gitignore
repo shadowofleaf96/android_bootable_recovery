@@ -1,8 +1,4 @@
 .*.swp
 *~
 tags
-*.patch
-
-*.img
-*.zip
 .vscode

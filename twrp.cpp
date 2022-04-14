@@ -1,7 +1,4 @@
 /*
-		Copyright 2018 ATG Droid  
-		This file is part of RWRP/RedWolf Recovery Project
-
 		TWRP is free software: you can redistribute it and/or modify
 		it under the terms of the GNU General Public License as published by
 		the Free Software Foundation, either version 3 of the License, or
@@ -113,17 +110,11 @@ int main(int argc, char **argv) {
 	snprintf(crash_prop_val, sizeof(crash_prop_val), "%d", crash_counter);
 	property_set("twrp.crash_counter", crash_prop_val);
 	property_set("ro.twrp.boot", "1");
-	property_set("ro.twrp.version", TW_MAIN_VERSION_STR);
-	property_set("ro.pb.version", PB_BUILD);
+	property_set("ro.twrp.version", TW_VERSION_STR);
 
 	time_t StartupTime = time(NULL);
-	printf("Starting PitchBlackRecovery %s (pid %s)\n", PB_BUILD, ctime(&StartupTime));
-	std::string ver = std::string(PB_BUILD);
-	DataManager::SetValue("pb_ver", ver.substr(0, ver.find("-")) );
-	DataManager::SetValue("pb_info", ver.substr(ver.find("-") + 1));
-#ifdef MTAINER
-	DataManager::SetValue("pb_maintainer", std::string(MTAINER));
-#endif
+	printf("Starting TWRP %s-%s on %s (pid %d)\n", TW_VERSION_STR, TW_GIT_REVISION, ctime(&StartupTime), getpid());
+
 	// Load default values to set DataManager constants and handle ifdefs
 	DataManager::SetDefaultValues();
 	printf("Starting the UI...\n");
@@ -167,7 +158,7 @@ int main(int argc, char **argv) {
 
 // We are doing this here during SAR-detection, since we are mounting the system-partition anyway
 // This way we don't need to remount it later, just for overriding properties
-#ifdef TW_OVERRIDE_SYSTEM_PROPS
+#if defined(TW_INCLUDE_LIBRESETPROP) && defined(TW_OVERRIDE_SYSTEM_PROPS)
 			stringstream override_props(EXPAND(TW_OVERRIDE_SYSTEM_PROPS));
 			string current_prop;
 			std::vector<std::string> build_prop_list = {"build.prop"};
@@ -218,19 +209,9 @@ int main(int argc, char **argv) {
 		LOGERR("Failing out of recovery due to problem with fstab.\n");
 		return -1;
 	}
-
 	PartitionManager.Output_Partition_Logging();
 	// Load up all the resources
 	gui_loadResources();
-
-	gui_print("********************************* \n");
-	gui_print("PitchBlack Recovery: Welcome! ^_^ \n");
-	gui_print("Maintained By PBRP Team \n");
-	gui_print("********************************* \n");
-	string null;
-	TWFunc::Exec_Cmd("getprop ro.omni.version > /tmp/prop.info && mv /tmp/prop.info /sdcard/PBRP/pbrp.info", null);
-	if(!null.empty())
-		LOGERR("Failed To Copy prop.info\n");
 
 	bool Shutdown = false;
 	string Send_Intent = "";
@@ -316,8 +297,21 @@ int main(int argc, char **argv) {
 	}
 
 	// Check for and run startup script if script exists
-	// TWFunc::check_and_run_script("/sbin/runatboot.sh", "boot");
-	// TWFunc::check_and_run_script("/sbin/postrecoveryboot.sh", "boot"); 
+	TWFunc::check_and_run_script("/sbin/runatboot.sh", "boot");
+	TWFunc::check_and_run_script("/sbin/postrecoveryboot.sh", "boot");
+
+#ifdef TW_INCLUDE_INJECTTWRP
+	// Back up TWRP Ramdisk if needed:
+	TWPartition* Boot = PartitionManager.Find_Partition_By_Path("/boot");
+	LOGINFO("Backing up TWRP ramdisk...\n");
+	if (Boot == NULL || Boot->Current_File_System != "emmc")
+		TWFunc::Exec_Cmd("injecttwrp --backup /tmp/backup_recovery_ramdisk.img");
+	else {
+		string injectcmd = "injecttwrp --backup /tmp/backup_recovery_ramdisk.img bd=" + Boot->Actual_Block_Device;
+		TWFunc::Exec_Cmd(injectcmd);
+	}
+	LOGINFO("Backup of TWRP ramdisk done.\n");
+#endif
 
 	// Offer to decrypt if the device is encrypted
 	if (DataManager::GetIntValue(TW_IS_ENCRYPTED) != 0) {
@@ -345,6 +339,7 @@ int main(int argc, char **argv) {
 
 	// Read the settings file
 	TWFunc::Update_Log_File();
+	DataManager::LoadTWRPFolderInfo();
 	DataManager::ReadSettingsFile();
 	PageManager::LoadLanguage(DataManager::GetStrValue("tw_language"));
 	GUIConsole::Translate_Now();
@@ -359,34 +354,6 @@ int main(int argc, char **argv) {
 	(DataManager::GetIntValue(TW_IS_ENCRYPTED) == 0 && TWFunc::Path_Exists(orsFile))) {
 		OpenRecoveryScript::Run_OpenRecoveryScript();
 	}
-
-	char encrypt_status[PROPERTY_VALUE_MAX];
-	property_get("ro.crypto.state", encrypt_status, "");
-	if (strcmp(encrypt_status, "") == 0 || strcmp(encrypt_status, "encrypted") == 0) {
-		int st = TWFunc::check_encrypt_status();
-		if (st != 0) {
-			strcpy(encrypt_status, "encrypted");
-			if (st == 1 || st == 3)
-				strcpy(encrypt_status, "encrypted with FDE");
-			else if (st == 2)
-				strcpy(encrypt_status, "encrypted with FBE");
-			if (st == 3)
-				gui_msg(Msg(msg::kWarning,"pb_encrypt_cn=Multiple Encryption Details Cached"));
-		}
-		else
-			strcpy(encrypt_status, "unencrypted");
-	}
-	else if (strncmp(encrypt_status, "encrypted", 9) == 0 && TWFunc::check_encrypt_status() == 0)
-		strcpy(encrypt_status, "unencrypted");
-	gui_msg(Msg(msg::kProcess,"pb_encrypt_st=Encryption Status : {1}")(encrypt_status));
-
-	property_get("ro.product.brand", encrypt_status, "");
-	DataManager::SetValue("pb_device_manufacturer", std::string(encrypt_status));
-	property_get("ro.product.device", encrypt_status, "");
-	DataManager::SetValue("pb_device", std::string(encrypt_status));
-	property_get("ro.product.model", encrypt_status, "");
-	DataManager::SetValue("pb_device_name", std::string(encrypt_status));
-	DataManager::SetValue("pb_build", string(BUILD));
 
 #ifdef TW_HAS_MTP
 	char mtp_crash_check[PROPERTY_VALUE_MAX];
@@ -440,10 +407,7 @@ int main(int argc, char **argv) {
 	twrpAdbBuFifo *adb_bu_fifo = new twrpAdbBuFifo();
 	adb_bu_fifo->threadAdbBuFifo();
 
-	if (PartitionManager.Get_Android_Root_Path() == "/system_root" && !DataManager::GetIntValue(PB_MOUNT_SYSTEM_AS_ROOT))
-	{
-		PartitionManager.Change_System_Root(false);
-	}
+	TWFunc::checkforapp(); //Checking compatibility for TWRP app
 
 	// Launch the main GUI
 	gui_start();
@@ -452,8 +416,6 @@ int main(int argc, char **argv) {
 	// Disable flashing of stock recovery
 	TWFunc::Disable_Stock_Recovery_Replace();
 #endif
-	if (property_get_bool("twrp.decrypt.done", false))
-		PartitionManager.Mount_All_Storage();
 
 	// Reboot
 	TWFunc::Update_Intent_File(Send_Intent);

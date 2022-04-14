@@ -56,7 +56,6 @@
 #include "roots.h"
 #include "ui.h"
 #include "verifier.h"
-#include "data.hpp"
 
 using namespace std::chrono_literals;
 
@@ -586,7 +585,7 @@ static int really_install_package(const std::string& path, bool* wipe_cache, boo
   }
 
   // Additionally verify the compatibility of the package.
-  if (!verify_package_compatibility(zip) && DataManager::GetIntValue(PB_TREBLE_COMP) == 0) {
+  if (!verify_package_compatibility(zip)) {
     log_buffer->push_back(android::base::StringPrintf("error: %d", kPackageCompatibilityFailure));
     CloseArchive(zip);
     return INSTALL_CORRUPT;

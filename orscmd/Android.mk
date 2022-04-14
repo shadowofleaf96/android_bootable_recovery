@@ -1,12 +1,10 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
-ifeq ($(PB_OFFICIAL),true)
-    LOCAL_CFLAGS += -DPB_MAIN_BUILD='"-OFFICIAL"'
-else ifeq ($(BETA_BUILD),true)
-    LOCAL_CFLAGS += -DPB_MAIN_BUILD='"-BETA"'
+ifneq ($(TW_DEVICE_VERSION),)
+    LOCAL_CFLAGS += -DTW_DEVICE_VERSION='"-$(TW_DEVICE_VERSION)"'
 else
-    LOCAL_CFLAGS += -DPB_MAIN_BUILD='"-UNOFFICIAL"'
+    LOCAL_CFLAGS += -DTW_DEVICE_VERSION='"-0"'
 endif
 
 LOCAL_SRC_FILES:= \

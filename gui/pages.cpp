@@ -70,7 +70,6 @@ HardwareKeyboard *PageManager::mHardwareKeyboard = NULL;
 bool PageManager::mReloadTheme = false;
 std::string PageManager::mStartPage = "main";
 std::vector<language_struct> Language_List;
-long mime;
 
 int tw_x_offset = 0;
 int tw_y_offset = 0;
@@ -252,34 +251,20 @@ bool LoadPlacement(xml_node<>* node, int* x, int* y, int* w /* = NULL */, int* h
 	if (!node)
 		return false;
 
-	xml_node<>* child = node;
-	while (child) {
-		GUIObject* plc = new GUIObject(child);
-		if (plc->isConditionValid()) {
-			if (plc->UpdateAllConditions())
-				break;
-		}
-		else
-			break;
-		child = child->next_sibling("placement");
-	}
-	if (!child)
-		return false;
+	if (node->first_attribute("x"))
+		*x = LoadAttrIntScaleX(node, "x") + tw_x_offset;
 
-	if (child->first_attribute("x"))
-		*x = LoadAttrIntScaleX(child, "x") + tw_x_offset;
+	if (node->first_attribute("y"))
+		*y = LoadAttrIntScaleY(node, "y") + tw_y_offset;
 
-	if (child->first_attribute("y"))
-		*y = LoadAttrIntScaleY(child, "y") + tw_y_offset;
+	if (w && node->first_attribute("w"))
+		*w = LoadAttrIntScaleX(node, "w");
 
-	if (w && child->first_attribute("w"))
-		*w = LoadAttrIntScaleX(child, "w");
+	if (h && node->first_attribute("h"))
+		*h = LoadAttrIntScaleY(node, "h");
 
-	if (h && child->first_attribute("h"))
-		*h = LoadAttrIntScaleY(child, "h");
-
-	if (placement && child->first_attribute("placement"))
-		*placement = (Placement) LoadAttrInt(child, "placement");
+	if (placement && node->first_attribute("placement"))
+		*placement = (Placement) LoadAttrInt(node, "placement");
 
 	return true;
 }
@@ -617,7 +602,7 @@ int Page::NotifyKey(int key, bool down)
 	// We work backwards, from top-most element to bottom-most element
 	for (iter = mActions.rbegin(); iter != mActions.rend(); iter++)
 	{
-		ret = (*iter)->NotifyKey(mime > 500 ? key + 200 : key, down);
+		ret = (*iter)->NotifyKey(key, down);
 		if (ret == 0)
 			return 0;
 		if (ret < 0) {
@@ -1306,11 +1291,6 @@ void PageManager::LoadLanguageListDir(string dir) {
 				LOGERR("No display value for '%s'\n", language_entry.filename.c_str());
 				language_entry.displayvalue = language_entry.filename;
 			}
-			child = parent->first_node("font");
-			if (child)
-				language_entry.font = child->value();
-			else
-				language_entry.font = "eng";
 			Language_List.push_back(language_entry);
 		}
 		doc->clear();
@@ -1551,7 +1531,7 @@ int PageManager::RunReload() {
 		ret_val = 1;
 	}
 
-	theme_path += "/PBRP/theme/ui.zip";
+	theme_path += "/TWRP/theme/ui.zip";
 	if (ret_val != 0 || ReloadPackage("TWRP", theme_path) != 0)
 	{
 		// Loading the custom theme failed - try loading the stock theme
